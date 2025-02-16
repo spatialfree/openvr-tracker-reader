@@ -45,6 +45,14 @@ int main() {
 
     // Main loop
     while (true) {
+        // Update tracker list periodically to handle hot-plugging
+        static auto lastUpdateTime = std::chrono::steady_clock::now();
+        auto currentTime = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastUpdateTime).count() >= 1) {
+            manager.updateTrackerList();
+            lastUpdateTime = currentTime;
+        }
+
         manager.updatePoses();
         size_t trackerCount = manager.getTrackerCount();
         
@@ -72,10 +80,41 @@ int main() {
             std::cout << "------------------------\n";
         }
 
-        // Send data through IPC
+        // Send data through IPC with retry logic
         if (trackerCount > 0) {
-            if (!ipcServer->sendTrackerData(poses, serials)) {
-                std::cerr << "Failed to send tracker data through IPC\n";
+            static int failureCount = 0;
+            static bool wasConnected = true;
+            const int maxRetries = 3;
+            bool sendSuccess = false;
+
+            for (int retry = 0; retry < maxRetries && !sendSuccess; retry++) {
+                if (ipcServer->sendTrackerData(poses, serials)) {
+                    sendSuccess = true;
+                    if (!wasConnected) {
+                        std::cout << "IPC connection restored\n";
+                        wasConnected = true;
+                    }
+                    failureCount = 0;
+                } else {
+                    failureCount++;
+                    if (retry < maxRetries - 1) {
+                        std::cerr << "Failed to send tracker data, retrying (" << retry + 1 << "/" << maxRetries << ")...\n";
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                }
+            }
+
+            if (!sendSuccess) {
+                if (wasConnected) {
+                    std::cerr << "IPC connection lost\n";
+                    wasConnected = false;
+                }
+                // Try to reinitialize IPC server after consecutive failures
+                if (failureCount > 10) {
+                    std::cout << "Attempting to reinitialize IPC server...\n";
+                    ipcServer->initialize();
+                    failureCount = 0;
+                }
             }
         }
         
@@ -88,19 +127,26 @@ int main() {
             float deltaTime = frameTime - lastFrameTime;
             lastFrameTime = frameTime;
             
-            if (deltaTime < 0.001f) { // Avoid spinning too fast
-                std::this_thread::sleep_for(std::chrono::microseconds(500));
+            // Target 1000Hz max update rate (1ms per frame)
+            const float targetFrameTime = 0.001f;
+            if (deltaTime < targetFrameTime) {
+                float sleepTime = (targetFrameTime - deltaTime) * 1000000.0f; // Convert to microseconds
+                std::this_thread::sleep_for(std::chrono::microseconds(static_cast<int>(sleepTime)));
             }
-            
+
+            // Calculate and log running average frame rate using exponential moving average
+            static float avgFrameRate = 0.0f;
+            const float alpha = 0.1f; // Smoothing factor (0.1 = 10% weight to new samples)
+            float instantFrameRate = 1.0f / deltaTime;
+            avgFrameRate = (alpha * instantFrameRate) + ((1.0f - alpha) * avgFrameRate);
+
             // Log frame rate every second
-            static float timeAccumulator = 0;
-            static int frameCount = 0;
-            timeAccumulator += deltaTime;
-            frameCount++;
-            if (timeAccumulator >= 1.0f) {
-                std::cout << "Average frame rate: " << frameCount / timeAccumulator << " Hz\n";
-                timeAccumulator = 0;
-                frameCount = 0;
+            static auto lastLogTime = std::chrono::steady_clock::now();
+            auto currentLogTime = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(currentLogTime - lastLogTime).count() >= 1) {
+                std::cout << "Average frame rate: " << std::fixed << std::setprecision(1) 
+                         << avgFrameRate << " Hz (instant: " << instantFrameRate << " Hz)\n";
+                lastLogTime = currentLogTime;
             }
         } else {
             // Fallback if compositor timing isn't available
