@@ -1,18 +1,18 @@
-#include "pipe_server.hpp"
+#include "win_pipe_server.hpp"
 #include <iostream>
 
-PipeServer::PipeServer(const std::string& pipeName) 
+WinPipeServer::WinPipeServer(const std::string& pipeName) 
     : m_pipeName(pipeName), m_pipe(INVALID_HANDLE_VALUE), m_isConnected(false) {
 }
 
-PipeServer::~PipeServer() {
+WinPipeServer::~WinPipeServer() {
     if (m_pipe != INVALID_HANDLE_VALUE) {
         CloseHandle(m_pipe);
         m_pipe = INVALID_HANDLE_VALUE;
     }
 }
 
-bool PipeServer::initialize() {
+bool WinPipeServer::initialize() {
     m_pipe = CreateNamedPipeA(
         m_pipeName.c_str(),
         PIPE_ACCESS_OUTBOUND,          // One-way pipe (server to client)
@@ -48,7 +48,7 @@ bool PipeServer::initialize() {
     return true;
 }
 
-bool PipeServer::writeData(const void* data, size_t size) {
+bool WinPipeServer::writeData(const void* data, size_t size) {
     if (!m_isConnected || m_pipe == INVALID_HANDLE_VALUE) {
         return false;
     }
@@ -62,8 +62,8 @@ bool PipeServer::writeData(const void* data, size_t size) {
     return bytesWritten == size;
 }
 
-bool PipeServer::sendTrackerData(const std::vector<TrackerManager::TrackerPose>& poses,
-                               const std::vector<std::string>& serials) {
+bool WinPipeServer::sendTrackerData(const std::vector<TrackerManager::TrackerPose>& poses,
+                                  const std::vector<std::string>& serials) {
     if (poses.size() != serials.size()) {
         return false;
     }
