@@ -1,85 +1,63 @@
 # OpenVR Tracker Reader
 
-A cross-platform C++ application that reads VR tracker data from OpenVR and makes it available to other applications (particularly useful for OpenXR applications that can't directly access trackers).
+A cross-platform bridge that makes OpenVR tracker data available to OpenXR applications through a simple IPC interface.
 
-## Use Case
-This project bridges a specific gap: While OpenXR is becoming the standard for VR development, it currently doesn't support additional trackers (beyond HMD and controllers). This tool allows OpenXR applications (like those built with StereoKit) to access tracker data by:
+## Why?
+OpenXR is becoming the standard for VR development but doesn't support additional trackers (beyond HMD and controllers). This tool bridges that gap by:
 1. Reading tracker data through OpenVR
-2. Making this data available through IPC (Inter-Process Communication)
+2. Making it available through IPC (Named Pipes on Windows, Domain Sockets on Linux)
 
 ## Features
-- Detects and tracks VR trackers (excluding HMD/controllers)
-- Real-time position (x,y,z) and rotation (quaternion) data
-- Tracker identification via serial numbers
-- Dynamic update rate (up to 1000Hz, automatically matches system capabilities)
-- Cross-platform IPC support:
-  - Windows: Named Pipes
-  - Linux/Unix: Domain Sockets
+- Real-time position and rotation data from VR trackers
+- Cross-platform: Windows and Linux support
 - Low latency (~0.1-0.5ms)
-- C# client included for easy integration with StereoKit/Unity
+- High performance (matches VR system capabilities, up to 1000Hz)
+- Simple C# client included
 
-## Requirements
-- CMake 3.12 or higher
-- C++17 compiler
-- OpenVR library
-- Windows or Linux/Unix operating system
+## Quick Start
 
-## Building
-
-### Windows
+### 1. Build and Run Server
 ```bash
-mkdir build
-cd build
+mkdir build && cd build
 cmake ..
-cmake --build .
-```
-
-### Linux
-```bash
-mkdir build
-cd build
-cmake ..
-make
-```
-
-## Environment Variables
-- `OpenVR_INCLUDE_DIR`: Path to OpenVR include directory (optional)
-
-## Usage
-
-### Running the Tracker Server
-```bash
+cmake --build .  # or 'make' on Linux
 ./vr_tracker_reader
 ```
 
-### Integrating with C# Applications
-1. Add the provided `TrackerReader.cs` to your project
-2. Initialize the connection:
+### 2. Use in Your C# Application
 ```csharp
-var trackerReader = new TrackerData();
-await trackerReader.ConnectAsync();
-```
-3. Read tracker data:
-```csharp
-var trackers = await trackerReader.ReadTrackersAsync();
-foreach (var tracker in trackers)
+// At startup:
+await TrackerReader.Initialize();
+
+// In your frame loop:
+if (TrackerReader.TryGetLatestPoses(out var poses))
 {
-    if (tracker.Valid)
+    foreach (var pose in poses)
     {
-        // Use tracker.X, Y, Z for position
-        // Use tracker.Qw, Qx, Qy, Qz for rotation
-        // tracker.Serial for identification
+        if (pose.Valid)
+        {
+            // Use tracker data:
+            // Position: pose.X, pose.Y, pose.Z (meters)
+            // Rotation: pose.Qw, pose.Qx, pose.Qy, pose.Qz
+            // ID: pose.Serial
+        }
     }
 }
+
+// At shutdown:
+TrackerReader.Shutdown();
 ```
 
+## Requirements
+- CMake 3.12+
+- C++17 compiler
+- OpenVR library
+- Windows or Linux
+
 ## Performance
-- IPC Latency: ~0.1-0.5ms
-- Update Rate: Dynamic (up to 1000Hz, typically matches HMD refresh rate)
-  - Base station tracking: 100Hz
-  - Raw sensor data: up to 1000Hz
-  - Pose updates: matches system capabilities (90Hz-144Hz typical)
-- Memory Usage: Minimal (< 10MB)
+- Latency: ~0.1-0.5ms
+- Update Rate: Matches system capabilities (typically 90-144Hz)
+- Memory: < 10MB
 
 ## Architecture
 ```
@@ -87,9 +65,11 @@ OpenVR -> C++ Server <-> IPC Channel <-> C# Client -> Your Application
 ```
 
 ## Contributing
-Contributions welcome! Particularly interested in:
-- Additional client implementations (Unity, Unreal, etc.)
+Contributions welcome! Areas of interest:
+- Additional client implementations
 - Performance optimizations
-- Additional IPC methods
-## Building with System OpenVR
-If OpenVR is installed on your system, the CMake configuration will automatically find and use it.
+- Enhanced error handling
+
+## Notes
+- Set `OpenVR_INCLUDE_DIR` environment variable if OpenVR headers aren't found
+- See `csharp_client/README.md` for detailed C# usage

@@ -1,10 +1,11 @@
 using System;
 using System.IO.Pipes;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 
-public class TrackerData
+public static class TrackerReader
 {
     public struct Pose
     {
@@ -14,32 +15,65 @@ public class TrackerData
         public string Serial;
     }
 
-    private NamedPipeClientStream pipeClient;
-    private bool isConnected = false;
-    private readonly string pipeName;
-    private byte[] buffer = new byte[8192]; // Match server buffer size
+    private static NamedPipeClientStream pipeClient;
+    private static ConcurrentQueue<Pose[]> poseQueue = new ConcurrentQueue<Pose[]>();
+    private static CancellationTokenSource cancellationSource;
+    private static Task readerTask;
+    private static bool isInitialized;
+    private static readonly byte[] buffer = new byte[8192]; // Match server buffer size
 
-    public TrackerData(string pipeName = "vr_tracker_data")
+    /// <summary>
+    /// Initializes the tracker reader and starts the background reading task.
+    /// Call this once at startup.
+    /// </summary>
+    public static async Task Initialize(string pipeName = "vr_tracker_data")
     {
-        this.pipeName = pipeName;
+        if (isInitialized) return;
+
+        try
+        {
+            pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.In);
+            Console.WriteLine($"Connecting to pipe: {pipeName}");
+            await pipeClient.ConnectAsync();
+            
+            cancellationSource = new CancellationTokenSource();
+            readerTask = RunReaderLoop(cancellationSource.Token);
+            
+            isInitialized = true;
+            Console.WriteLine("Connected to pipe server!");
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Failed to initialize: {e.Message}");
+            throw;
+        }
     }
 
-    public async Task ConnectAsync()
+    private static async Task RunReaderLoop(CancellationToken token)
     {
-        if (isConnected) return;
-
-        pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.In);
-        Console.WriteLine($"Connecting to pipe: {pipeName}");
-        
-        await pipeClient.ConnectAsync();
-        isConnected = true;
-        Console.WriteLine("Connected to pipe server!");
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                var poses = await ReadTrackersAsync();
+                poseQueue.Enqueue(poses.ToArray());
+                
+                // Only keep the latest frame
+                while (poseQueue.Count > 1)
+                {
+                    poseQueue.TryDequeue(out _);
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Error in reader loop: {e.Message}");
+                await Task.Delay(1000, token); // Wait before retrying
+            }
+        }
     }
 
-    public async Task<List<Pose>> ReadTrackersAsync()
+    private static async Task<List<Pose>> ReadTrackersAsync()
     {
-        if (!isConnected) return new List<Pose>();
-
         var poses = new List<Pose>();
 
         try
@@ -78,16 +112,15 @@ public class TrackerData
                 poses.Add(pose);
             }
         }
-        catch (Exception e)
+        catch (Exception)
         {
-            Console.WriteLine($"Error reading from pipe: {e.Message}");
-            isConnected = false;
+            throw;
         }
 
         return poses;
     }
 
-    private async Task ReadExactAsync(byte[] buffer, int offset, int count)
+    private static async Task ReadExactAsync(byte[] buffer, int offset, int count)
     {
         int bytesRead = 0;
         while (bytesRead < count)
@@ -96,42 +129,53 @@ public class TrackerData
         }
     }
 
-    public void Disconnect()
+    /// <summary>
+    /// Non-blocking method to get the latest tracker poses.
+    /// Call this from your frame update/step/tick method.
+    /// </summary>
+    /// <param name="poses">Array of latest tracker poses if available.</param>
+    /// <returns>True if new poses were available, false otherwise.</returns>
+    public static bool TryGetLatestPoses(out Pose[] poses)
     {
-        if (isConnected)
-        {
-            pipeClient.Close();
-            isConnected = false;
-        }
+        return poseQueue.TryDequeue(out poses);
+    }
+
+    /// <summary>
+    /// Cleanly shuts down the tracker reader.
+    /// Call this when your application exits.
+    /// </summary>
+    public static void Shutdown()
+    {
+        if (!isInitialized) return;
+
+        cancellationSource?.Cancel();
+        readerTask?.Wait();
+        pipeClient?.Close();
+        
+        isInitialized = false;
     }
 }
 
-// Example usage in StereoKit:
+// Example usage in a frame-based application:
 /*
-private TrackerData trackerReader;
+// At startup:
+await TrackerReader.Initialize();
 
-public async Task Initialize()
+// In your frame loop:
+if (TrackerReader.TryGetLatestPoses(out var poses))
 {
-    trackerReader = new TrackerData();
-    await trackerReader.ConnectAsync();
-}
-
-public async Task UpdateTrackers()
-{
-    var trackers = await trackerReader.ReadTrackersAsync();
-    foreach (var tracker in trackers)
+    foreach (var pose in poses)
     {
-        if (tracker.Valid)
+        if (pose.Valid)
         {
-            // Convert to StereoKit types
-            Vec3 position = new Vec3(tracker.X, tracker.Y, tracker.Z);
-            Quat rotation = new Quat(tracker.Qx, tracker.Qy, tracker.Qz, tracker.Qw);
-            
-            // Use the tracker data in your StereoKit app
-            // Example: Update visual representation of tracker
-            Mesh trackerMesh = GetTrackerMesh(tracker.Serial);
-            trackerMesh.Draw(Matrix.TRS(position, rotation, Vec3.One));
+            // Use the tracker data:
+            // Position: pose.X, pose.Y, pose.Z (in meters)
+            // Rotation: pose.Qw, pose.Qx, pose.Qy, pose.Qz (quaternion)
+            // ID: pose.Serial
         }
     }
 }
+
+// At shutdown:
+TrackerReader.Shutdown();
 */
