@@ -14,8 +14,16 @@ find_package(OpenVR REQUIRED)
 set(SOURCES
     src/main.cpp
     src/tracker_manager.cpp
-    src/pipe_server.cpp
 )
+
+# Platform-specific sources
+if(WIN32)
+    list(APPEND SOURCES src/win_pipe_server.cpp)
+    add_definitions(-DUSE_WINDOWS_PIPE)
+else()
+    list(APPEND SOURCES src/unix_socket_server.cpp)
+    add_definitions(-DUSE_UNIX_SOCKET)
+endif()
 
 # Create executable
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -26,7 +34,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${OPENVR_INCLUDE_DIRS})
 # Link OpenVR and platform-specific libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE ${OPENVR_LIBRARIES})
 
-# Windows-specific configuration
+# Platform-specific configuration
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     if(MSVC)
@@ -35,5 +43,5 @@ if(WIN32)
         target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
     endif()
 else()
-    message(FATAL_ERROR "This project currently only supports Windows due to Windows Named Pipes usage")
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
 endif()

@@ -1,10 +1,15 @@
 #include "tracker_manager.hpp"
-#include "pipe_server.hpp"
+#ifdef USE_WINDOWS_PIPE
+#include "win_pipe_server.hpp"
+#else
+#include "unix_socket_server.hpp"
+#endif
 #include <iostream>
 #include <chrono>
 #include <thread>
 #include <iomanip>
 #include <vector>
+#include <memory>
 
 void printPose(const TrackerManager::TrackerPose& pose) {
     std::cout << std::fixed << std::setprecision(3);
@@ -23,10 +28,15 @@ int main() {
 
     std::cout << "OpenVR initialized successfully\n";
 
-    // Initialize pipe server
-    PipeServer pipeServer("\\\\.\\pipe\\vr_tracker_data");
-    if (!pipeServer.initialize()) {
-        std::cerr << "Failed to initialize pipe server\n";
+    // Initialize IPC server
+#ifdef USE_WINDOWS_PIPE
+    std::unique_ptr<IPCServer> ipcServer = std::make_unique<WinPipeServer>("\\\\.\\pipe\\vr_tracker_data");
+#else
+    std::unique_ptr<IPCServer> ipcServer = std::make_unique<UnixSocketServer>("/tmp/vr_tracker_data");
+#endif
+
+    if (!ipcServer->initialize()) {
+        std::cerr << "Failed to initialize IPC server\n";
         return 1;
     }
     
@@ -62,10 +72,10 @@ int main() {
             std::cout << "------------------------\n";
         }
 
-        // Send data through pipe
+        // Send data through IPC
         if (trackerCount > 0) {
-            if (!pipeServer.sendTrackerData(poses, serials)) {
-                std::cerr << "Failed to send tracker data through pipe\n";
+            if (!ipcServer->sendTrackerData(poses, serials)) {
+                std::cerr << "Failed to send tracker data through IPC\n";
             }
         }
         
