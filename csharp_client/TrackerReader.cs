@@ -38,20 +38,20 @@ public static class TrackerReader
             {
                 // Unix domain socket
                 var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-                var endPoint = new UnixDomainSocketEndPoint("/tmp/vr_tracker_data");
+                var endPoint = new UnixDomainSocketEndPoint("/tmp/openxr_tracker_extenuation");
                 await socket.ConnectAsync(endPoint);
                 ipcStream = new NetworkStream(socket);
-                Console.WriteLine("Connecting to Unix domain socket: /tmp/vr_tracker_data");
+                Console.WriteLine("Connecting to Unix domain socket: /tmp/openxr_tracker_extenuation");
             }
             else
             {
                 // Windows named pipe
-                var pipeClient = new NamedPipeClientStream(".", "vr_tracker_data", PipeDirection.In);
-                Console.WriteLine("Connecting to Windows named pipe: vr_tracker_data");
+                var pipeClient = new NamedPipeClientStream(".", "openxr_tracker_extenuation", PipeDirection.In);
+                Console.WriteLine("Connecting to Windows named pipe: openxr_tracker_extenuation");
                 await pipeClient.ConnectAsync();
                 ipcStream = pipeClient;
             }
-            
+
             cancellationSource = new CancellationTokenSource();
             readerTask = RunReaderLoop(cancellationSource.Token);
             isInitialized = true;
@@ -72,7 +72,7 @@ public static class TrackerReader
             {
                 var poses = await ReadTrackersAsync();
                 poseQueue.Enqueue(poses.ToArray());
-                
+
                 // Only keep the latest frame
                 while (poseQueue.Count > 1)
                 {
@@ -166,7 +166,7 @@ public static class TrackerReader
         cancellationSource?.Cancel();
         readerTask?.Wait();
         ipcStream?.Dispose();
-        
+
         isInitialized = false;
     }
 }

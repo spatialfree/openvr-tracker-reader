@@ -1,6 +1,6 @@
-# C# Client for OpenVR Tracker Reader
+# C# Client for OpenXR Tracker Extenuation
 
-This client provides a C# interface to read tracker data from the OpenVR Tracker Reader service, designed for frame-based applications.
+This client provides a C# interface to read tracker data from the OpenXR Tracker Extenuation service, designed for frame-based applications.
 
 ## Usage
 
