@@ -30,6 +30,9 @@ public:
     // Get serial number for a specific tracker
     std::string getTrackerSerial(size_t index) const;
 
+    // Update list of connected trackers
+    void updateTrackerList();
+
 private:
     vr::IVRSystem* m_vrSystem;
     std::vector<vr::TrackedDeviceIndex_t> m_trackerIndices;
@@ -37,7 +40,4 @@ private:
     
     // Helper to check if device is a tracker
     bool isTracker(vr::TrackedDeviceIndex_t deviceIndex) const;
-    
-    // Update list of connected trackers
-    void updateTrackerList();
 };
