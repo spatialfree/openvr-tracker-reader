@@ -34,3 +34,5 @@ The program will display:
 - Number of detected trackers
 - Position and rotation data for each tracker
 - Serial numbers for identification
+## Building with System OpenVR
+If OpenVR is installed on your system, the CMake configuration will automatically find and use it.
