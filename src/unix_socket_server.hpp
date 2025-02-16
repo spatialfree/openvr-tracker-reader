@@ -6,7 +6,7 @@
 
 class UnixSocketServer : public IPCServer {
 public:
-    UnixSocketServer(const std::string& socketPath = "/tmp/vr_tracker_data");
+    UnixSocketServer(const std::string& socketPath = "/tmp/openxr_tracker_extenuation");
     ~UnixSocketServer();
 
     bool initialize() override;

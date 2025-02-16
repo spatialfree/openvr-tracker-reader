@@ -4,7 +4,7 @@
 
 class WinPipeServer : public IPCServer {
 public:
-    WinPipeServer(const std::string& pipeName = "\\\\.\\pipe\\vr_tracker_data");
+    WinPipeServer(const std::string& pipeName = "\\\\.\\pipe\\openxr_tracker_extenuation");
     ~WinPipeServer();
 
     bool initialize() override;

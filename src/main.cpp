@@ -14,13 +14,13 @@
 void printPose(const TrackerManager::TrackerPose& pose) {
     std::cout << std::fixed << std::setprecision(3);
     std::cout << "Position: (" << pose.x << ", " << pose.y << ", " << pose.z << ") m\n";
-    std::cout << "Rotation: [w:" << pose.qw << ", x:" << pose.qx 
+    std::cout << "Rotation: [w:" << pose.qw << ", x:" << pose.qx
               << ", y:" << pose.qy << ", z:" << pose.qz << "]\n";
 }
 
 int main() {
     TrackerManager manager;
-    
+
     if (!manager.initialize()) {
         std::cerr << "Failed to initialize OpenVR\n";
         return 1;
@@ -30,9 +30,9 @@ int main() {
 
     // Initialize IPC server with platform-specific path
 #ifdef USE_WINDOWS_PIPE
-    const char* DEFAULT_IPC_PATH = "\\\\.\\pipe\\vr_tracker_data";  // Windows named pipe
+    const char* DEFAULT_IPC_PATH = "\\\\.\\pipe\\openxr_tracker_extenuation";  // Windows named pipe
 #else
-    const char* DEFAULT_IPC_PATH = "/tmp/vr_tracker_data";          // Unix domain socket
+    const char* DEFAULT_IPC_PATH = "/tmp/openxr_tracker_extenuation";          // Unix domain socket
 #endif
 
     std::unique_ptr<IPCServer> ipcServer;
@@ -46,7 +46,7 @@ int main() {
         std::cerr << "Failed to initialize IPC server\n";
         return 1;
     }
-    
+
     std::vector<TrackerManager::TrackerPose> poses;
     std::vector<std::string> serials;
 
@@ -62,22 +62,22 @@ int main() {
 
         manager.updatePoses();
         size_t trackerCount = manager.getTrackerCount();
-        
+
         // Clear previous data
         poses.clear();
         serials.clear();
 
         std::cout << "\033[2J\033[H";  // Clear screen and move cursor to top
         std::cout << "Found " << trackerCount << " trackers\n\n";
-        
+
         // Collect all tracker data
         for (size_t i = 0; i < trackerCount; ++i) {
             std::string serial = manager.getTrackerSerial(i);
             auto pose = manager.getTrackerPose(i);
-            
+
             poses.push_back(pose);
             serials.push_back(serial);
-            
+
             std::cout << "Tracker " << i + 1 << " (Serial: " << serial << ")\n";
             if (pose.valid) {
                 printPose(pose);
@@ -124,7 +124,7 @@ int main() {
                 }
             }
         }
-        
+
         // Use OpenVR's frame timing for optimal update rate
         vr::Compositor_FrameTiming timing = {0};
         timing.m_nSize = sizeof(vr::Compositor_FrameTiming);
@@ -133,7 +133,7 @@ int main() {
             static float lastFrameTime = frameTime;
             float deltaTime = frameTime - lastFrameTime;
             lastFrameTime = frameTime;
-            
+
             // Target 1000Hz max update rate (1ms per frame)
             const float targetFrameTime = 0.001f;
             if (deltaTime < targetFrameTime) {
@@ -151,7 +151,7 @@ int main() {
             static auto lastLogTime = std::chrono::steady_clock::now();
             auto currentLogTime = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(currentLogTime - lastLogTime).count() >= 1) {
-                std::cout << "Average frame rate: " << std::fixed << std::setprecision(1) 
+                std::cout << "Average frame rate: " << std::fixed << std::setprecision(1)
                          << avgFrameRate << " Hz (instant: " << instantFrameRate << " Hz)\n";
                 lastLogTime = currentLogTime;
             }
@@ -160,6 +160,6 @@ int main() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
-    
+
     return 0;
 }

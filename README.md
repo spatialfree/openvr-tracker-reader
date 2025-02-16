@@ -1,4 +1,4 @@
-# OpenVR Tracker Reader
+# OpenXR Tracker Extenuation
 
 A cross-platform bridge that makes OpenVR tracker data available to OpenXR applications through a simple IPC interface.
 
@@ -21,12 +21,12 @@ OpenXR is becoming the standard for VR development but doesn't support additiona
 mkdir build && cd build
 cmake ..
 cmake --build .  # or 'make' on Linux
-./vr_tracker_reader
+./openxr_tracker_extenuation
 ```
 
 The server creates an IPC endpoint with a platform-specific path:
-- Windows: `\\.\pipe\vr_tracker_data` (Named Pipe)
-- Linux: `/tmp/vr_tracker_data` (Unix Domain Socket)
+- Windows: `\\.\pipe\openxr_tracker_extenuation` (Named Pipe)
+- Linux: `/tmp/openxr_tracker_extenuation` (Unix Domain Socket)
 
 ### 2. Use in Your C# Application
 The C# client automatically handles platform-specific IPC details, so your code remains the same on both Windows and Linux:
