@@ -62,34 +62,64 @@ TrackerManager::TrackerPose TrackerManager::getTrackerPose(size_t index) const {
     pose.y = mat[1][3];
     pose.z = mat[2][3];
 
-    // Convert rotation matrix to quaternion
-    float trace = mat[0][0] + mat[1][1] + mat[2][2];
-    if (trace > 0) {
-        float s = 0.5f / sqrt(trace + 1.0f);
-        pose.qw = 0.25f / s;
-        pose.qx = (mat[2][1] - mat[1][2]) * s;
-        pose.qy = (mat[0][2] - mat[2][0]) * s;
-        pose.qz = (mat[1][0] - mat[0][1]) * s;
-    } else {
-        if (mat[0][0] > mat[1][1] && mat[0][0] > mat[2][2]) {
-            float s = 2.0f * sqrt(1.0f + mat[0][0] - mat[1][1] - mat[2][2]);
-            pose.qw = (mat[2][1] - mat[1][2]) / s;
-            pose.qx = 0.25f * s;
-            pose.qy = (mat[0][1] + mat[1][0]) / s;
-            pose.qz = (mat[0][2] + mat[2][0]) / s;
-        } else if (mat[1][1] > mat[2][2]) {
-            float s = 2.0f * sqrt(1.0f + mat[1][1] - mat[0][0] - mat[2][2]);
-            pose.qw = (mat[0][2] - mat[2][0]) / s;
-            pose.qx = (mat[0][1] + mat[1][0]) / s;
-            pose.qy = 0.25f * s;
-            pose.qz = (mat[1][2] + mat[2][1]) / s;
-        } else {
-            float s = 2.0f * sqrt(1.0f + mat[2][2] - mat[0][0] - mat[1][1]);
-            pose.qw = (mat[1][0] - mat[0][1]) / s;
-            pose.qx = (mat[0][2] + mat[2][0]) / s;
-            pose.qy = (mat[1][2] + mat[2][1]) / s;
-            pose.qz = 0.25f * s;
-        }
+    // Convert rotation matrix to quaternion using a numerically stable method
+    float r11 = mat[0][0], r12 = mat[0][1], r13 = mat[0][2];
+    float r21 = mat[1][0], r22 = mat[1][1], r23 = mat[1][2];
+    float r31 = mat[2][0], r32 = mat[2][1], r33 = mat[2][2];
+
+    // Compute quaternion components squared
+    float qw_sq = (1.0f + r11 + r22 + r33) / 4.0f;
+    float qx_sq = (1.0f + r11 - r22 - r33) / 4.0f;
+    float qy_sq = (1.0f - r11 + r22 - r33) / 4.0f;
+    float qz_sq = (1.0f - r11 - r22 + r33) / 4.0f;
+
+    // Find maximum component squared
+    float max_sq = qw_sq;
+    int max_idx = 0;
+    if (qx_sq > max_sq) { max_sq = qx_sq; max_idx = 1; }
+    if (qy_sq > max_sq) { max_sq = qy_sq; max_idx = 2; }
+    if (qz_sq > max_sq) { max_sq = qz_sq; max_idx = 3; }
+
+    // Compute the maximum component and remaining components
+    float max_val = sqrt(max_sq);
+    float mult = 1.0f / (4.0f * max_val);
+
+    switch (max_idx) {
+        case 0: // qw is max
+            pose.qw = max_val;
+            pose.qx = (r32 - r23) * mult;
+            pose.qy = (r13 - r31) * mult;
+            pose.qz = (r21 - r12) * mult;
+            break;
+        case 1: // qx is max
+            pose.qx = max_val;
+            pose.qw = (r32 - r23) * mult;
+            pose.qy = (r12 + r21) * mult;
+            pose.qz = (r13 + r31) * mult;
+            break;
+        case 2: // qy is max
+            pose.qy = max_val;
+            pose.qw = (r13 - r31) * mult;
+            pose.qx = (r12 + r21) * mult;
+            pose.qz = (r23 + r32) * mult;
+            break;
+        case 3: // qz is max
+            pose.qz = max_val;
+            pose.qw = (r21 - r12) * mult;
+            pose.qx = (r13 + r31) * mult;
+            pose.qy = (r23 + r32) * mult;
+            break;
+    }
+
+    // Normalize quaternion
+    float norm = sqrt(pose.qw * pose.qw + pose.qx * pose.qx + 
+                     pose.qy * pose.qy + pose.qz * pose.qz);
+    if (norm > 0.0001f) {
+        float inv_norm = 1.0f / norm;
+        pose.qw *= inv_norm;
+        pose.qx *= inv_norm;
+        pose.qy *= inv_norm;
+        pose.qz *= inv_norm;
     }
 
     pose.valid = true;
