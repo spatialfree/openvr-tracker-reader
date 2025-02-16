@@ -28,11 +28,18 @@ int main() {
 
     std::cout << "OpenVR initialized successfully\n";
 
-    // Initialize IPC server
+    // Initialize IPC server with platform-specific path
 #ifdef USE_WINDOWS_PIPE
-    std::unique_ptr<IPCServer> ipcServer = std::make_unique<WinPipeServer>("\\\\.\\pipe\\vr_tracker_data");
+    const char* DEFAULT_IPC_PATH = "\\\\.\\pipe\\vr_tracker_data";  // Windows named pipe
 #else
-    std::unique_ptr<IPCServer> ipcServer = std::make_unique<UnixSocketServer>("/tmp/vr_tracker_data");
+    const char* DEFAULT_IPC_PATH = "/tmp/vr_tracker_data";          // Unix domain socket
+#endif
+
+    std::unique_ptr<IPCServer> ipcServer;
+#ifdef USE_WINDOWS_PIPE
+    ipcServer = std::make_unique<WinPipeServer>(DEFAULT_IPC_PATH);
+#else
+    ipcServer = std::make_unique<UnixSocketServer>(DEFAULT_IPC_PATH);
 #endif
 
     if (!ipcServer->initialize()) {

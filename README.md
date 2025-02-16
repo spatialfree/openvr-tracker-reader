@@ -24,6 +24,10 @@ cmake --build .  # or 'make' on Linux
 ./vr_tracker_reader
 ```
 
+The server creates an IPC endpoint with a platform-specific path:
+- Windows: `\\.\pipe\vr_tracker_data` (Named Pipe)
+- Linux: `/tmp/vr_tracker_data` (Unix Domain Socket)
+
 ### 2. Use in Your C# Application
 ```csharp
 // At startup:
