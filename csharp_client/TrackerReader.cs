@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Net.Sockets;
+using System.IO;
 
 public static class TrackerReader
 {
@@ -15,7 +17,7 @@ public static class TrackerReader
         public string Serial;
     }
 
-    private static NamedPipeClientStream pipeClient;
+    private static Stream ipcStream;
     private static ConcurrentQueue<Pose[]> poseQueue = new ConcurrentQueue<Pose[]>();
     private static CancellationTokenSource cancellationSource;
     private static Task readerTask;
@@ -26,21 +28,34 @@ public static class TrackerReader
     /// Initializes the tracker reader and starts the background reading task.
     /// Call this once at startup.
     /// </summary>
-    public static async Task Initialize(string pipeName = "vr_tracker_data")
+    public static async Task Initialize()
     {
         if (isInitialized) return;
 
         try
         {
-            pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.In);
-            Console.WriteLine($"Connecting to pipe: {pipeName}");
-            await pipeClient.ConnectAsync();
+            if (Environment.OSVersion.Platform == PlatformID.Unix)
+            {
+                // Unix domain socket
+                var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                var endPoint = new UnixDomainSocketEndPoint("/tmp/vr_tracker_data");
+                await socket.ConnectAsync(endPoint);
+                ipcStream = new NetworkStream(socket);
+                Console.WriteLine("Connecting to Unix domain socket: /tmp/vr_tracker_data");
+            }
+            else
+            {
+                // Windows named pipe
+                var pipeClient = new NamedPipeClientStream(".", "vr_tracker_data", PipeDirection.In);
+                Console.WriteLine("Connecting to Windows named pipe: vr_tracker_data");
+                await pipeClient.ConnectAsync();
+                ipcStream = pipeClient;
+            }
             
             cancellationSource = new CancellationTokenSource();
             readerTask = RunReaderLoop(cancellationSource.Token);
-            
             isInitialized = true;
-            Console.WriteLine("Connected to pipe server!");
+            Console.WriteLine("Connected to IPC endpoint successfully!");
         }
         catch (Exception e)
         {
@@ -125,7 +140,7 @@ public static class TrackerReader
         int bytesRead = 0;
         while (bytesRead < count)
         {
-            bytesRead += await pipeClient.ReadAsync(buffer, offset + bytesRead, count - bytesRead);
+            bytesRead += await ipcStream.ReadAsync(buffer, offset + bytesRead, count - bytesRead);
         }
     }
 
@@ -150,7 +165,7 @@ public static class TrackerReader
 
         cancellationSource?.Cancel();
         readerTask?.Wait();
-        pipeClient?.Close();
+        ipcStream?.Dispose();
         
         isInitialized = false;
     }

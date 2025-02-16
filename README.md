@@ -24,10 +24,16 @@ cmake --build .  # or 'make' on Linux
 ./vr_tracker_reader
 ```
 
+The server creates an IPC endpoint with a platform-specific path:
+- Windows: `\\.\pipe\vr_tracker_data` (Named Pipe)
+- Linux: `/tmp/vr_tracker_data` (Unix Domain Socket)
+
 ### 2. Use in Your C# Application
+The C# client automatically handles platform-specific IPC details, so your code remains the same on both Windows and Linux:
+
 ```csharp
 // At startup:
-await TrackerReader.Initialize();
+await TrackerReader.Initialize();  // Automatically uses the correct IPC method for your platform
 
 // In your frame loop:
 if (TrackerReader.TryGetLatestPoses(out var poses))

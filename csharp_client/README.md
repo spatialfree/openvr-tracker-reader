@@ -35,6 +35,9 @@ TrackerReader.Shutdown();
 - Provides non-blocking access to the latest data in your frame loop
 - Automatically handles reconnection on errors
 - Only keeps the latest data to prevent queue buildup
+- Automatically uses the correct IPC method for each platform:
+  - Windows: Named Pipes
+  - Linux: Unix Domain Sockets
 
 ## Data Format
 
